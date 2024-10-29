@@ -9,7 +9,7 @@ image:
   repository: implementing-ci-cd-in-local-env
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "V1.0"
+  tag: ""
 
 appName: demo-java-app
 
