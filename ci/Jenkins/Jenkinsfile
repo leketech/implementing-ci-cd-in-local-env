@@ -17,7 +17,7 @@ pipeline {
         }
         stage('Static Code Analysis') {
             environment {
-                SONAR_URL = "http://localhost:9000"
+                SONAR_URL = "http://sonarqube:9000"
             }
             steps {
                 withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
@@ -33,64 +33,23 @@ pipeline {
             steps {
                 script {
                     try {
-                        // Verify workspace
                         sh 'pwd && ls -la'
-                        
-                        // Check Docker socket permissions
-                        sh '''
-                            if [ ! -w "/var/run/docker.sock" ]; then
-                                echo "Docker socket is not writable. Attempting to fix permissions..."
-                                sudo chmod 666 /var/run/docker.sock || {
-                                    echo "Failed to modify Docker socket permissions"
-                                    exit 1
-                                }
-                            fi
-                        '''
-                        
-                        // Verify Docker installation and permissions
-                        sh '''
-                            docker version || {
-                                echo "Docker is not accessible. Please ensure Jenkins user is in the docker group"
-                                exit 1
-                            }
-                        '''
-                        
-                        // Build image with proper error handling
+                        sh 'docker version'
                         dir('demo-java-app') {
-                            sh """
-                                docker build -t ${DOCKER_IMAGE} . || {
-                                    echo "Docker build failed"
-                                    exit 1
-                                }
-                            """
+                            sh "docker build -t ${DOCKER_IMAGE} ."
                         }
-                        
-                        // Login and push with proper error handling
                         withCredentials([usernamePassword(credentialsId: 'dockerhub', passwordVariable: 'DOCKER_PASSWORD', usernameVariable: 'DOCKER_USERNAME')]) {
                             sh """
                                 echo "Logging in to DockerHub..."
-                                echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin || {
-                                    echo "Docker login failed"
-                                    exit 1
-                                }
-                                
+                                echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin
                                 echo "Pushing image ${DOCKER_IMAGE}..."
-                                docker push ${DOCKER_IMAGE} || {
-                                    echo "Docker push failed"
-                                    exit 1
-                                }
-                                
-                                # Cleanup
-                                docker logout
+                                docker push ${DOCKER_IMAGE}
                             """
                         }
                     } catch (Exception e) {
                         echo "Failed to build or push Docker image: ${e.getMessage()}"
                         currentBuild.result = 'FAILURE'
                         error("Pipeline failed: ${e.getMessage()}")
-                    } finally {
-                        // Cleanup any dangling images
-                        sh 'docker system prune -f'
                     }
                 }
             }
@@ -112,11 +71,6 @@ pipeline {
                     '''
                 }
             }
-        }
-    }
-    post {
-        always {
-            cleanWs()
         }
     }
 }
