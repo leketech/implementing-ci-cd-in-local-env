@@ -12,7 +12,6 @@ pipeline {
         stage('Build and Test') {
             steps {
                 sh 'ls -ltr'
-                // Build the project and create a JAR file
                 sh 'cd demo-java-app && mvn clean package'
             }
         }
@@ -36,28 +35,62 @@ pipeline {
                     try {
                         // Verify workspace
                         sh 'pwd && ls -la'
-
-                        // Verify Docker installation
-                        sh 'docker version'
-
-                        // Build image
+                        
+                        // Check Docker socket permissions
+                        sh '''
+                            if [ ! -w "/var/run/docker.sock" ]; then
+                                echo "Docker socket is not writable. Attempting to fix permissions..."
+                                sudo chmod 666 /var/run/docker.sock || {
+                                    echo "Failed to modify Docker socket permissions"
+                                    exit 1
+                                }
+                            fi
+                        '''
+                        
+                        // Verify Docker installation and permissions
+                        sh '''
+                            docker version || {
+                                echo "Docker is not accessible. Please ensure Jenkins user is in the docker group"
+                                exit 1
+                            }
+                        '''
+                        
+                        // Build image with proper error handling
                         dir('demo-java-app') {
-                            sh "docker build -t ${DOCKER_IMAGE} ."
+                            sh """
+                                docker build -t ${DOCKER_IMAGE} . || {
+                                    echo "Docker build failed"
+                                    exit 1
+                                }
+                            """
                         }
-
-                        // Login and push
+                        
+                        // Login and push with proper error handling
                         withCredentials([usernamePassword(credentialsId: 'dockerhub', passwordVariable: 'DOCKER_PASSWORD', usernameVariable: 'DOCKER_USERNAME')]) {
                             sh """
                                 echo "Logging in to DockerHub..."
-                                echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin
+                                echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin || {
+                                    echo "Docker login failed"
+                                    exit 1
+                                }
+                                
                                 echo "Pushing image ${DOCKER_IMAGE}..."
-                                docker push ${DOCKER_IMAGE}
+                                docker push ${DOCKER_IMAGE} || {
+                                    echo "Docker push failed"
+                                    exit 1
+                                }
+                                
+                                # Cleanup
+                                docker logout
                             """
                         }
                     } catch (Exception e) {
                         echo "Failed to build or push Docker image: ${e.getMessage()}"
                         currentBuild.result = 'FAILURE'
                         error("Pipeline failed: ${e.getMessage()}")
+                    } finally {
+                        // Cleanup any dangling images
+                        sh 'docker system prune -f'
                     }
                 }
             }
@@ -79,6 +112,11 @@ pipeline {
                     '''
                 }
             }
+        }
+    }
+    post {
+        always {
+            cleanWs()
         }
     }
 }
