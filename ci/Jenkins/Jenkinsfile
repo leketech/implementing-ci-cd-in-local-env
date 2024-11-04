@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 pipeline {
     agent any
     parameters {
@@ -168,4 +167,3 @@ pipeline {
         }
     }
 }
->>>>>>> 8899056c6592ac49291cd821f32b25e118024b4b
