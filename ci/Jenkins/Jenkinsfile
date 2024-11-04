@@ -1,7 +1,7 @@
 pipeline {
     agent any
     environment {
-        SONARQUBE_HOST = "http://localhost:9000"
+        SONARQUBE_HOST = "http://sonarqube:9000"
     }
     parameters {
         string(name: 'build_version', defaultValue: 'V1.0', description: 'Build version to use for Docker image')
